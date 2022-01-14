@@ -1,5 +1,4 @@
-#include <dclimateiot3.hpp>
-
+#include <dclimateiot.hpp>
 #include <eosio/asset.hpp>
 #include <delphioracle.hpp>
 #include "LoraEncoder.cpp"
@@ -7,8 +6,8 @@
 using namespace std;
 using namespace eosio;
 
-ACTION dclimateiot3::addsensor( name devname,
-                                uint64_t unix_time_s ) {
+ACTION dclimateiot::addsensor( name devname,
+                  uint64_t unix_time_s ) {
 
   // Only dclimateiot can add a new sensor
   require_auth( get_self() );
@@ -52,7 +51,7 @@ ACTION dclimateiot3::addsensor( name devname,
 
 }
 
-ACTION dclimateiot3::addminer( name devname,
+ACTION dclimateiot::addminer( name devname,
                                name miner ) {
 
   // To allow this action to be called using the "iot"_n permission, 
@@ -77,7 +76,7 @@ ACTION dclimateiot3::addminer( name devname,
                                
 }
 
-ACTION dclimateiot3::addnoaa( string id_string,
+ACTION dclimateiot::addnoaa( string id_string,
                               float latitude_deg,
                               float longitude_deg,
                               float elevation_m ) {
@@ -98,20 +97,49 @@ ACTION dclimateiot3::addnoaa( string id_string,
 
 }
 
-ACTION dclimateiot3::submitdata(name devname,
+ACTION dclimateiot::addflag( uint64_t bit_value,
+                            string processing_step,
+                            string issue,
+                            string explanation ) {
+  
+  flags_table_t _flags(get_self(), get_first_receiver().value);
+
+  auto flag_itr = _flags.find( bit_value );
+
+  if (flag_itr==_flags.cend()) {
+    _flags.emplace( get_self(), [&](auto& flag) {
+      flag.bit_value = bit_value;
+      flag.processing_step = processing_step;
+      flag.issue = issue;
+      flag.explanation = explanation;
+    });
+  } else {
+    _flags.modify(flag_itr, get_self(), [&](auto& flag) {
+      flag.bit_value = bit_value;
+      flag.processing_step = processing_step;
+      flag.issue = issue;
+      flag.explanation = explanation;
+    });
+  }
+
+}
+
+ACTION dclimateiot::submitdata(name devname,
                                 uint64_t unix_time_s,
                                 float pressure_hpa,
                                 float temperature_c, 
                                 float humidity_percent,
                                 uint8_t flags) {
 
-  // Temporarily just require dlcimateiot to run this action
-  require_auth(get_self());
+  // This flag is to be used to tell the user the data 
+  //     was signed by the calling server instead of the device
+  uint8_t signature_flag = 0;
 
-  // When we are able to sign eosio transactions on the device, we can require
-  //    that only the device's account can call this action
-  //
-  //require_auth( devname );
+  // Check that permissions are met
+  if( !has_auth(devname) ) { // check if device signed transaction
+    require_auth( get_self() ); // if device didn't sign it, then dclimateiot should have
+    signature_flag = 1; // Flag the data as signed by the server
+  }
 
   // Find the sensor in the sensors table
   sensors_table_t _sensors(get_self(), get_first_receiver().value);
@@ -131,7 +159,11 @@ ACTION dclimateiot3::submitdata(name devname,
       wthr.pressure_hpa = pressure_hpa;
       wthr.temperature_c = temperature_c;
       wthr.humidity_percent = humidity_percent;
-      wthr.flags = flags;
+  });
+
+  // Update flags variable
+  _weather.modify(weather_itr, get_self(), [&](auto& wthr) {
+      wthr.flags = flags + signature_flag; // + TODO: all other flags
   });
 
   // Set rewards 
@@ -168,7 +200,7 @@ ACTION dclimateiot3::submitdata(name devname,
 
 }
 
-ACTION dclimateiot3::submitgps( name devname,
+ACTION dclimateiot::submitgps( name devname,
                                 uint64_t unix_time_s, 
                                 float latitude_deg,
                                 float longitude_deg,
@@ -279,7 +311,7 @@ ACTION dclimateiot3::submitgps( name devname,
 
 }
 
-ACTION dclimateiot3::chngreward(name devname,
+ACTION dclimateiot::chngreward(name devname,
                                    name token_contract) {
 
   // Only self can run this Action
@@ -296,7 +328,7 @@ ACTION dclimateiot3::chngreward(name devname,
 
 }
 
-ACTION dclimateiot3::setrate(name token_contract,
+ACTION dclimateiot::setrate(name token_contract,
                               float base_hourly_rate) {
                                   
   // Only self can run this Action
@@ -310,7 +342,7 @@ ACTION dclimateiot3::setrate(name token_contract,
   });
 }
 
-ACTION dclimateiot3::addparam(name token_contract,
+ACTION dclimateiot::addparam(name token_contract,
                                   float max_distance_km,
                                   float max_rounds,
                                   string symbol_letters,
@@ -334,7 +366,7 @@ ACTION dclimateiot3::addparam(name token_contract,
   });
 }
 
-ACTION dclimateiot3::removeparam( name token_contract )
+ACTION dclimateiot::removeparam( name token_contract )
 {
   // Only self can run this Action
   require_auth(get_self());
@@ -345,7 +377,7 @@ ACTION dclimateiot3::removeparam( name token_contract )
   _parameters.erase( parameters_itr );
 }
 
-ACTION dclimateiot3::removereward( name devname )
+ACTION dclimateiot::removereward( name devname )
 {
 
   // Require auth from self
@@ -358,7 +390,7 @@ ACTION dclimateiot3::removereward( name devname )
 }
 
 
-ACTION dclimateiot3::removeobs(name devname)
+ACTION dclimateiot::removeobs(name devname)
 {
   // Require auth from self
   require_auth( get_self() );
@@ -369,7 +401,7 @@ ACTION dclimateiot3::removeobs(name devname)
   _weather.erase( itr );
 }
 
-ACTION dclimateiot3::removesensor(name devname)
+ACTION dclimateiot::removesensor(name devname)
 {
   // Require auth from self
   require_auth( get_self() );
@@ -400,7 +432,7 @@ ACTION dclimateiot3::removesensor(name devname)
 
 }
 
-ACTION dclimateiot3::rmnoaasensor(uint16_t num)
+ACTION dclimateiot::rmnoaasensor(uint16_t num)
 {
   // Erase "num" number of datapoints from noaa sensor list
 
@@ -421,7 +453,7 @@ ACTION dclimateiot3::rmnoaasensor(uint16_t num)
     
 }
 
-float dclimateiot3::calcDistance( float lat1, float lon1, float lat2, float lon2 )
+float dclimateiot::calcDistance( float lat1, float lon1, float lat2, float lon2 )
 {
   // This function uses the given lat/lon of the devices to deterimine
   //    the distance between them.
@@ -443,13 +475,13 @@ float dclimateiot3::calcDistance( float lat1, float lon1, float lat2, float lon2
 
 }
 
-float dclimateiot3::degToRadians( float degrees )
+float dclimateiot::degToRadians( float degrees )
 {
   // M_PI comes from math.h
     return (degrees * M_PI) / 180.0;
 }
 
-float dclimateiot3::calcLocMultiplier( name devname, float max_distance )
+float dclimateiot::calcLocMultiplier( name devname, float max_distance )
 {
   // First get the latitude/longitude
   weather_table_t _weather(get_self(), get_first_receiver().value);
@@ -526,7 +558,7 @@ float dclimateiot3::calcLocMultiplier( name devname, float max_distance )
 }
 
 
-void dclimateiot3::sendReward( name miner, name devname ) 
+void dclimateiot::sendReward( name miner, name devname ) 
 {
   /* Determines how much reward to send based on:
    1. Base hourly reward for given currency type
@@ -589,4 +621,4 @@ void dclimateiot3::sendReward( name miner, name devname )
 }
 
 // Dispatch the actions to the blockchain
-EOSIO_DISPATCH(dclimateiot3, (addsensor)(addminer)(addnoaa)(submitdata)(submitgps)(chngreward)(setrate)(addparam)(removeparam)(removereward)(removeobs)(removesensor)(rmnoaasensor))
+EOSIO_DISPATCH(dclimateiot, (addsensor)(addminer)(addnoaa)(addflag)(submitdata)(submitgps)(chngreward)(setrate)(addparam)(removeparam)(removereward)(removeobs)(removesensor)(rmnoaasensor))
