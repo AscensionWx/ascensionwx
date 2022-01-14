@@ -4,6 +4,20 @@
     "types": [],
     "structs": [
         {
+            "name": "addminer",
+            "base": "",
+            "fields": [
+                {
+                    "name": "devname",
+                    "type": "name"
+                },
+                {
+                    "name": "miner",
+                    "type": "name"
+                }
+            ]
+        },
+        {
             "name": "addnoaa",
             "base": "",
             "fields": [
@@ -64,11 +78,7 @@
             "base": "",
             "fields": [
                 {
-                    "name": "dev_name",
-                    "type": "name"
-                },
-                {
-                    "name": "owner",
+                    "name": "devname",
                     "type": "name"
                 },
                 {
@@ -92,6 +102,28 @@
             ]
         },
         {
+            "name": "flags",
+            "base": "",
+            "fields": [
+                {
+                    "name": "bit_number",
+                    "type": "uint64"
+                },
+                {
+                    "name": "set_by",
+                    "type": "string"
+                },
+                {
+                    "name": "problem",
+                    "type": "string"
+                },
+                {
+                    "name": "explanation",
+                    "type": "string"
+                }
+            ]
+        },
+        {
             "name": "noaasensors",
             "base": "",
             "fields": [
@@ -110,60 +142,6 @@
                 {
                     "name": "elevation_m",
                     "type": "float32"
-                }
-            ]
-        },
-        {
-            "name": "observations",
-            "base": "",
-            "fields": [
-                {
-                    "name": "devname",
-                    "type": "name"
-                },
-                {
-                    "name": "unix_time_s",
-                    "type": "uint64"
-                },
-                {
-                    "name": "pressure_hpa",
-                    "type": "float32"
-                },
-                {
-                    "name": "temperature_c",
-                    "type": "float32"
-                },
-                {
-                    "name": "humidity_percent",
-                    "type": "float32"
-                },
-                {
-                    "name": "wind_dir_deg",
-                    "type": "float32"
-                },
-                {
-                    "name": "wind_spd_ms",
-                    "type": "float32"
-                },
-                {
-                    "name": "rain_1hr",
-                    "type": "float32"
-                },
-                {
-                    "name": "rain_6hr",
-                    "type": "float32"
-                },
-                {
-                    "name": "rain_24hr",
-                    "type": "float32"
-                },
-                {
-                    "name": "solar_wm2",
-                    "type": "float32"
-                },
-                {
-                    "name": "flags",
-                    "type": "uint8"
                 }
             ]
         },
@@ -278,28 +256,6 @@
             ]
         },
         {
-            "name": "security",
-            "base": "",
-            "fields": [
-                {
-                    "name": "devname",
-                    "type": "name"
-                },
-                {
-                    "name": "pubkey",
-                    "type": "string"
-                },
-                {
-                    "name": "identity_DID",
-                    "type": "string"
-                },
-                {
-                    "name": "last_encoded_bytes",
-                    "type": "string"
-                }
-            ]
-        },
-        {
             "name": "sensors",
             "base": "",
             "fields": [
@@ -310,18 +266,6 @@
                 {
                     "name": "miner",
                     "type": "name"
-                },
-                {
-                    "name": "latitude_deg",
-                    "type": "float64"
-                },
-                {
-                    "name": "longitude_deg",
-                    "type": "float64"
-                },
-                {
-                    "name": "elevation",
-                    "type": "float32"
                 },
                 {
                     "name": "time_created",
@@ -386,25 +330,45 @@
             ]
         },
         {
-            "name": "submitelev",
+            "name": "submitgps",
             "base": "",
             "fields": [
                 {
-                    "name": "dev_name",
+                    "name": "devname",
                     "type": "name"
                 },
                 {
-                    "name": "elevation",
+                    "name": "unix_time_s",
+                    "type": "uint64"
+                },
+                {
+                    "name": "latitude_deg",
+                    "type": "float32"
+                },
+                {
+                    "name": "longitude_deg",
+                    "type": "float32"
+                },
+                {
+                    "name": "elev_gps_m",
+                    "type": "float32"
+                },
+                {
+                    "name": "lat_deg_geo",
+                    "type": "float32"
+                },
+                {
+                    "name": "lon_deg_geo",
                     "type": "float32"
                 }
             ]
         },
         {
-            "name": "submitgps",
+            "name": "weather",
             "base": "",
             "fields": [
                 {
-                    "name": "dev_name",
+                    "name": "devname",
                     "type": "name"
                 },
                 {
@@ -418,11 +382,64 @@
                 {
                     "name": "longitude_deg",
                     "type": "float64"
+                },
+                {
+                    "name": "elevation_gps_m",
+                    "type": "uint16"
+                },
+                {
+                    "name": "pressure_hpa",
+                    "type": "float32"
+                },
+                {
+                    "name": "temperature_c",
+                    "type": "float32"
+                },
+                {
+                    "name": "humidity_percent",
+                    "type": "float32"
+                },
+                {
+                    "name": "wind_dir_deg",
+                    "type": "float32"
+                },
+                {
+                    "name": "wind_spd_ms",
+                    "type": "float32"
+                },
+                {
+                    "name": "rain_1hr",
+                    "type": "float32"
+                },
+                {
+                    "name": "rain_6hr",
+                    "type": "float32"
+                },
+                {
+                    "name": "rain_24hr",
+                    "type": "float32"
+                },
+                {
+                    "name": "solar_wm2",
+                    "type": "float32"
+                },
+                {
+                    "name": "flags",
+                    "type": "uint8"
+                },
+                {
+                    "name": "loc_accuracy",
+                    "type": "string"
                 }
             ]
         }
     ],
     "actions": [
+        {
+            "name": "addminer",
+            "type": "addminer",
+            "ricardian_contract": ""
+        },
         {
             "name": "addnoaa",
             "type": "addnoaa",
@@ -479,11 +496,6 @@
             "ricardian_contract": ""
         },
         {
-            "name": "submitelev",
-            "type": "submitelev",
-            "ricardian_contract": ""
-        },
-        {
             "name": "submitgps",
             "type": "submitgps",
             "ricardian_contract": ""
@@ -491,15 +503,15 @@
     ],
     "tables": [
         {
-            "name": "noaasensors",
-            "type": "noaasensors",
+            "name": "flags",
+            "type": "flags",
             "index_type": "i64",
             "key_names": [],
             "key_types": []
         },
         {
-            "name": "observations",
-            "type": "observations",
+            "name": "noaasensors",
+            "type": "noaasensors",
             "index_type": "i64",
             "key_names": [],
             "key_types": []
@@ -519,15 +531,15 @@
             "key_types": []
         },
         {
-            "name": "security",
-            "type": "security",
+            "name": "sensors",
+            "type": "sensors",
             "index_type": "i64",
             "key_names": [],
             "key_types": []
         },
         {
-            "name": "sensors",
-            "type": "sensors",
+            "name": "weather",
+            "type": "weather",
             "index_type": "i64",
             "key_names": [],
             "key_types": []
