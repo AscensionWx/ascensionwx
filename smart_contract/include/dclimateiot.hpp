@@ -4,15 +4,17 @@
 using namespace std;
 using namespace eosio;
 
-CONTRACT dclimateiot : public contract {
+CONTRACT dclimateiot3 : public contract {
   public:
     using contract::contract;
 
     // Should be called by device
 
-    ACTION addsensor( name dev_name,
-                      name owner,
+    ACTION addsensor( name devname,
                       uint64_t unix_time_s);
+
+    ACTION addminer( name devname,
+                     name miner);
 
     ACTION addnoaa( string id,
                     float latitude_deg,
@@ -26,13 +28,13 @@ CONTRACT dclimateiot : public contract {
                       float humidity_percent,
                       uint8_t flags);
 
-    ACTION submitgps( name dev_name,
+    ACTION submitgps( name devname,
                       uint64_t unix_time_s, 
-                      double latitude_deg,
-                      double longitude_deg);
-    
-    ACTION submitelev( name dev_name,
-                      float elevation);
+                      float latitude_deg,
+                      float longitude_deg,                      
+                      float elev_gps_m,
+                      float lat_deg_geo,
+                      float lon_deg_geo);
 
     ACTION chngreward(name devname,
                         name token_contract);
@@ -58,33 +60,35 @@ CONTRACT dclimateiot : public contract {
 
     // Local functions (not actions)
     void sendReward( name miner, name devname );
-    name getMiner( name devname ); // Gets the owner of a device, given its name
 
     float calcDistance( float lat1, float lon1, float lat2, float lon2 ); // Calculate distance between two points
     float degToRadians( float degrees );
     float calcLocMultiplier( name devname, float max_distance );
-    string gen_ptrh_byte_buffer( float pressure_hpa,
-                                float temperature_c,
-                                float humidity_percent);
+
+    void set_flags();
     
     static uint64_t noaa_to_uint64(string id) { 
 
-        // Convert to lower case and convert remaining zeros to x
-        for_each(id.begin(), id.end(), [](char & c){c = tolower(c);});
+      /* This function encodes the noaa station id into a unique
+            uint64 so that it can be inserted into a data table
+      */
 
-        // replace all numbers with a new letter to preserve uniqueness
-        replace( id.begin(), id.end(), '0', 'a');
-        replace( id.begin(), id.end(), '1', 'b');
-        replace( id.begin(), id.end(), '2', 'c');
-        replace( id.begin(), id.end(), '3', 'd');
-        replace( id.begin(), id.end(), '4', 'e');
-        replace( id.begin(), id.end(), '5', 'f');
-        replace( id.begin(), id.end(), '6', 'g');
-        replace( id.begin(), id.end(), '7', 'h');
-        replace( id.begin(), id.end(), '8', 'i');
-        replace( id.begin(), id.end(), '9', 'j');
+      // Convert to lower case
+      for_each(id.begin(), id.end(), [](char & c){c = tolower(c);});
 
-        return name(id).value;
+      // replace all numbers with a new letter to preserve uniqueness
+      replace( id.begin(), id.end(), '0', 'a');
+      replace( id.begin(), id.end(), '1', 'b');
+      replace( id.begin(), id.end(), '2', 'c');
+      replace( id.begin(), id.end(), '3', 'd');
+      replace( id.begin(), id.end(), '4', 'e');
+      replace( id.begin(), id.end(), '5', 'f');
+      replace( id.begin(), id.end(), '6', 'g');
+      replace( id.begin(), id.end(), '7', 'h');
+      replace( id.begin(), id.end(), '8', 'i');
+      replace( id.begin(), id.end(), '9', 'j');
+
+      return name(id).value;
 
     }
 
@@ -93,9 +97,6 @@ CONTRACT dclimateiot : public contract {
     TABLE sensors {
         name devname;
         name miner;
-        double latitude_deg;
-        double longitude_deg;
-        float elevation;
         uint64_t time_created;
         uint64_t last_location_update;
         string message_type;
@@ -103,16 +104,12 @@ CONTRACT dclimateiot : public contract {
 
         auto  primary_key() const { return devname.value; }
         uint64_t by_miner() const { return miner.value; }
-        double by_latitude() const { return latitude_deg; }
-        double by_longitude() const { return longitude_deg; }
-        uint64_t by_update() const { return last_location_update; } // Useful for filtering out unmaintained sensors
+        uint64_t by_geoupdate() const { return last_location_update; } // Useful for filtering out unmaintained sensors
     };
     typedef multi_index<name("sensors"), 
                         sensors,
                         indexed_by<"miner"_n, const_mem_fun<sensors, uint64_t, &sensors::by_miner>>,
-                        indexed_by<"latitude"_n, const_mem_fun<sensors, double, &sensors::by_latitude>>,
-                        indexed_by<"longitude"_n, const_mem_fun<sensors, double, &sensors::by_longitude>>,
-                        indexed_by<"update"_n, const_mem_fun<sensors, uint64_t, &sensors::by_update>>
+                        indexed_by<"geoupdate"_n, const_mem_fun<sensors, uint64_t, &sensors::by_geoupdate>>
 
     > sensors_table_t;
 
@@ -129,9 +126,12 @@ CONTRACT dclimateiot : public contract {
     };
     typedef multi_index<name("parameters"), parameters> parameters_table_t;
 
-    TABLE observations {
+    TABLE weather {
       name devname;
       uint64_t unix_time_s;
+      double latitude_deg;
+      double longitude_deg;
+      uint16_t elevation_gps_m;
       float pressure_hpa;
       float temperature_c;
       float humidity_percent;
@@ -142,11 +142,20 @@ CONTRACT dclimateiot : public contract {
       float rain_24hr;
       float solar_wm2;
       uint8_t flags;
+      string loc_accuracy;
 
-      auto  primary_key() const { return devname.value; }
+      auto primary_key() const { return devname.value; }
+      uint64_t by_unixtime() const { return unix_time_s; }
+      double by_latitude() const { return latitude_deg; }
+      double by_longitude() const { return longitude_deg; }
     };
     //using observations_index = multi_index<"observations"_n, observations>;
-    typedef multi_index<name("observations"), observations> observations_table_t;
+    typedef multi_index<name("weather"), 
+                        weather,
+                        indexed_by<"unixtime"_n, const_mem_fun<weather, uint64_t, &weather::by_unixtime>>,
+                        indexed_by<"latitude"_n, const_mem_fun<weather, double, &weather::by_latitude>>,
+                        indexed_by<"longitude"_n, const_mem_fun<weather, double, &weather::by_longitude>>
+    > weather_table_t;
 
     TABLE rewards {
       name devname;
@@ -158,16 +167,6 @@ CONTRACT dclimateiot : public contract {
       auto primary_key() const { return devname.value; }
     };
     typedef multi_index<name("rewards"), rewards> rewards_table_t;
-
-    TABLE security {
-      name devname;
-      string pubkey;
-      string identity_DID;
-      string last_encoded_bytes;
-
-      auto primary_key() const { return devname.value; }
-    };
-    typedef multi_index<name("security"), security> security_table_t;
 
     TABLE noaasensors {
       string id_string;
@@ -186,5 +185,15 @@ CONTRACT dclimateiot : public contract {
                         indexed_by<"latitude"_n, const_mem_fun<noaasensors, double, &noaasensors::by_latitude>>,
                         indexed_by<"longitude"_n, const_mem_fun<noaasensors, double, &noaasensors::by_longitude>>
     > noaa_table_t;
+
+    TABLE flags {
+      uint64_t bit_number;
+      string set_by;
+      string problem;
+      string explanation;
+
+      auto primary_key() const { return bit_number; }
+    };
+    typedef multi_index<name("flags"), flags> flags_table_t;
 
 };
