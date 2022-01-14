@@ -1,4 +1,4 @@
-#include <dclimateiot.hpp>
+#include <dclimateiot3.hpp>
 
 #include <eosio/asset.hpp>
 #include <delphioracle.hpp>
@@ -7,15 +7,11 @@
 using namespace std;
 using namespace eosio;
 
-ACTION dclimateiot::addsensor( name devname,
-                                name miner,
+ACTION dclimateiot3::addsensor( name devname,
                                 uint64_t unix_time_s ) {
 
-  // Require auth from self
+  // Only dclimateiot can add a new sensor
   require_auth( get_self() );
-
-  // First check that miner account exists
-  check( is_account(miner) , "Account doesn't exist.");
 
   name default_token = "eosio.token"_n;
 
@@ -25,36 +21,27 @@ ACTION dclimateiot::addsensor( name devname,
   // Add the row to the observation set
   _sensors.emplace(get_self(), [&](auto& sensor) {
     sensor.devname = devname;
-    sensor.miner = miner;
-    sensor.latitude_deg = 0.0;
-    sensor.longitude_deg = 0.0;
-    sensor.elevation = 0.0;
     sensor.time_created = unix_time_s;
     sensor.last_location_update = 0;
     sensor.message_type = "p/t/rh";
     sensor.firmware_version = "0.3.0";
   });
 
-  // Add the row to the security table
-  security_table_t _security(get_self(), miner.value);
-  _security.emplace(get_self(), [&](auto& security) {
-    security.devname = devname;
-    security.pubkey = "";
-    security.identity_DID = "";
-    security.last_encoded_bytes = "";
-  });
-
-  // Create the observations table with the miner's scope
-  observations_table_t _observations(get_self(), miner.value );
-  _observations.emplace(get_self(), [&](auto& obs) {
-    obs.devname = devname;
+  // Create the weather table with the miner's scope
+  weather_table_t _weather(get_self(), get_first_receiver().value );
+  _weather.emplace(get_self(), [&](auto& wthr) {
+    wthr.devname = devname;
+    wthr.latitude_deg = 0.0;
+    wthr.longitude_deg = 0.0;
+    wthr.elevation_gps_m = 0;
+    wthr.loc_accuracy = "None ";
   });
 
   parameters_table_t _parameters(get_self(), get_self().value );
   auto parameters_itr = _parameters.find( default_token.value );
 
   // Set rewards 
-  rewards_table_t _rewards( get_self(), miner.value );
+  rewards_table_t _rewards( get_self(), get_first_receiver().value );
   _rewards.emplace( get_self(), [&](auto& reward) {
     reward.devname = devname;
     reward.last_round = 0;
@@ -65,7 +52,32 @@ ACTION dclimateiot::addsensor( name devname,
 
 }
 
-ACTION dclimateiot::addnoaa( string id_string,
+ACTION dclimateiot3::addminer( name devname,
+                               name miner ) {
+
+  // To allow this action to be called using the "iot"_n permission, 
+  //   make sure eosio linkauth action assigns iot permission to this action
+  //
+  // The benefit is that the "active" key (which traditionally transfers token balances)
+  //   doesn't need to be on the same server as the one with inbound internet traffic
+
+  require_auth(get_self());
+
+  // First check that device and miner accounts exist
+  check( is_account(devname) , "Account doesn't exist.");
+  check( is_account(miner) , "Account doesn't exist.");
+
+  // Get upperbound of sensors table
+  sensors_table_t _sensors(get_self(), get_first_receiver().value);
+  auto sensor_itr = _sensors.find( devname.value );
+
+  _sensors.modify(sensor_itr, get_self(), [&](auto& sensor) {
+      sensor.miner = miner;
+  });
+                               
+}
+
+ACTION dclimateiot3::addnoaa( string id_string,
                               float latitude_deg,
                               float longitude_deg,
                               float elevation_m ) {
@@ -86,71 +98,44 @@ ACTION dclimateiot::addnoaa( string id_string,
 
 }
 
-ACTION dclimateiot::submitdata(name devname,
+ACTION dclimateiot3::submitdata(name devname,
                                 uint64_t unix_time_s,
                                 float pressure_hpa,
                                 float temperature_c, 
                                 float humidity_percent,
                                 uint8_t flags) {
 
-  
+  // Temporarily just require dlcimateiot to run this action
   require_auth(get_self());
 
   // When we are able to sign eosio transactions on the device, we can require
-  //    that only the device's account can change data in the contract
+  //    that only the device's account can call this action
   //
-  // require_auth( devname );
+  //require_auth( devname );
 
-  // Caution use the following line. It forces iot permission to be passed
-  //   Tools like NODE-RED currently pass @active permission by default. You have
-  //   to update telos-node-red-contrib to allow use of custom permissions first
-  //
-  // The benefit is that the "active" key (which transfers token balances)
-  //   doesn't need to be on the same server as the one with inbound internet traffic
-  //
-  // Make sure eosio linkauth action assigns iot permission to submitdata action
-  //require_auth(permission_level( get_self(), "iot"_n));
-
-
-
-    // Find the owner's name to get the scope
+  // Find the sensor in the sensors table
   sensors_table_t _sensors(get_self(), get_first_receiver().value);
   auto sensor_itr = _sensors.find( devname.value );
 
-  // Get the sensors data table
-  name miner = sensor_itr->miner;
-  string msg_type = sensor_itr->message_type;
+  // Since any account can technically call this action, we first check that the device exists
+  //    in the sensors table
+  check( sensor_itr != _sensors.cend() , "Device not in table.");
 
-  // Get device row in observations table
-  observations_table_t _observations(get_self(), miner.value );
-  auto observations_itr = _observations.find( devname.value ); // In case the owner has multiple devices
+  // Get device row in weather table
+  weather_table_t _weather(get_self(), get_first_receiver().value );
+  auto weather_itr = _weather.find( devname.value ); // In case the owner has multiple devices
 
-  // Update the observations table
-  _observations.modify(observations_itr, get_self(), [&](auto& obs) {
-      obs.unix_time_s = unix_time_s;
-      obs.pressure_hpa = pressure_hpa;
-      obs.temperature_c = temperature_c;
-      obs.humidity_percent = humidity_percent;
-      obs.flags = flags;
-  });
-
-  string bytes;
-  if (msg_type.compare("p/t/rh") == 0) // Equals 0 means they are the same
-  {
-    bytes = gen_ptrh_byte_buffer(pressure_hpa, 
-                                temperature_c,
-                                humidity_percent);
-  }
-
-  // Update encoded bytes in the security table
-  security_table_t _security(get_self(), miner.value );
-  auto security_itr = _security.find( devname.value ); // In case the owner has multiple devices
-  _security.modify( security_itr, get_self(), [&](auto& sec) {
-    //sec.last_encoded_bytes = bytes; // temporarily removing in case there's overflow happening
+  // Update the weather table
+  _weather.modify(weather_itr, get_self(), [&](auto& wthr) {
+      wthr.unix_time_s = unix_time_s;
+      wthr.pressure_hpa = pressure_hpa;
+      wthr.temperature_c = temperature_c;
+      wthr.humidity_percent = humidity_percent;
+      wthr.flags = flags;
   });
 
   // Set rewards 
-  rewards_table_t _rewards( get_self(), miner.value );
+  rewards_table_t _rewards( get_self(), get_first_receiver().value );
   auto rewards_itr = _rewards.find( devname.value );
   
   uint64_t last_round = rewards_itr->last_round;
@@ -158,29 +143,39 @@ ACTION dclimateiot::submitdata(name devname,
   // Check if it has been 1 hour since we paid out the reward
   if ( unix_time_s > last_round + 3600)
   {
+
     if ( unix_time_s > last_round + 3600*2 ) // Missed the last round
     {
       _rewards.modify( rewards_itr, get_self(), [&](auto& reward) {
         reward.consecutive_rounds = 0;
+        reward.last_round = unix_time_s;
+      });
+    } else {
+      _rewards.modify( rewards_itr, get_self(), [&](auto& reward) {
+        reward.consecutive_rounds += 1;
+        reward.last_round = last_round + 3600;
       });
     }
 
-    // Send the reward
-    sendReward( miner, devname );
-
-    _rewards.modify( rewards_itr, get_self(), [&](auto& reward) {
-      reward.last_round = unix_time_s;
-      reward.consecutive_rounds += 1;
-    });
+    // Send the reward if miner account present
+    name miner = sensor_itr->miner;
+    if ( is_account(miner) )
+    {
+      sendReward( miner, devname );
+    }
 
   }
 
 }
 
-ACTION dclimateiot::submitgps( name devname,
+ACTION dclimateiot3::submitgps( name devname,
                                 uint64_t unix_time_s, 
-                                double latitude_deg,
-                                double longitude_deg) {
+                                float latitude_deg,
+                                float longitude_deg,
+                                float elev_gps_m,
+                                float lat_deg_geo,
+                                float lon_deg_geo) {
+                                
   /*
     WARNING:  This action can be very intensive and may result in a CPU timeout.
               It is recommended this ACTION be attempted 2-3 times by the calling application,
@@ -190,22 +185,88 @@ ACTION dclimateiot::submitgps( name devname,
       multiplier. This requires looping over many noaa stations.
   */
 
+  // To allow this action to be called using the "iot"_n permission, 
+  //   make sure eosio linkauth action assigns iot permission to submitgps action
+  //
+  // The benefit is that the "active" key (which traditionally transfers token balances)
+  //   doesn't need to be on the same server as the one with inbound internet traffic
+
   // Require auth from self
   require_auth( get_self() );
 
-  // Get upperbound of sensors table
+  // Get sensors table
   sensors_table_t _sensors(get_self(), get_first_receiver().value);
+
+  weather_table_t _weather(get_self(), get_first_receiver().value);
+  auto weather_itr = _weather.find( devname.value );
+
+  // If all fields are blank, exit the function
+  if ( latitude_deg == 0 && longitude_deg == 0 && lat_deg_geo == 0 && lon_deg_geo == 0 ) return;
+
+  if ( latitude_deg != 0 && longitude_deg != 0 && lat_deg_geo == 0 && lon_deg_geo == 0 )
+  {
+    // If we submit lat/lon without elevation data, we can assume it's based on "shipment city"
+    if (  elev_gps_m == 0 )
+    {
+      _weather.modify(weather_itr, get_self(), [&](auto& wthr) {
+        wthr.loc_accuracy = "Low (Shipment city name)";
+        wthr.latitude_deg = latitude_deg;
+        wthr.longitude_deg = longitude_deg;
+      });
+    } else {
+    // We have gps elevation, so data came from GPS
+      _weather.modify(weather_itr, get_self(), [&](auto& wthr) {
+        wthr.loc_accuracy = "Medium (GPS only)";
+        wthr.latitude_deg = latitude_deg;
+        wthr.longitude_deg = longitude_deg;
+        wthr.elevation_gps_m = elev_gps_m;
+      });
+    }
+  }
+
+  // If only geolocation lat/lons are supplied
+  if ( latitude_deg == 0 && latitude_deg == 0 && lat_deg_geo != 0 && lon_deg_geo != 0 )
+  {
+    _weather.modify(weather_itr, get_self(), [&](auto& wthr) {
+      wthr.loc_accuracy = "Medium (Geolocation only)";
+      wthr.latitude_deg = lat_deg_geo;
+      wthr.longitude_deg = lon_deg_geo;
+    });
+  }
+
+  // Finally, if all 4 fields are filled out, we give high confidence
+  if ( latitude_deg != 0 && latitude_deg != 0 && lat_deg_geo != 0 && lon_deg_geo != 0 )
+  {
+      float distance = calcDistance( latitude_deg, 
+                                    longitude_deg, 
+                                    lat_deg_geo, 
+                                    lon_deg_geo );
+
+      // LoRaWAN gateways can hear a maximum of about 15 kilometers away
+      check( distance < 15.0 ,
+          "Geolocation check fail. Geolocation and GPS "+
+          to_string(uint32_t(distance))+
+          " km apart.");
+          
+
+      _weather.modify(weather_itr, get_self(), [&](auto& wthr) {
+        wthr.loc_accuracy = "High (Geolocation + GPS)";
+        wthr.latitude_deg = latitude_deg;
+        wthr.longitude_deg = longitude_deg;
+        wthr.elevation_gps_m = elev_gps_m;
+      });
+
+  }
+
 
   // Find devname in table
   auto sensor_itr = _sensors.find( devname.value );
 
   _sensors.modify(sensor_itr, get_self(), [&](auto& sensor) {
-      sensor.latitude_deg = latitude_deg;
-      sensor.longitude_deg = longitude_deg;
       sensor.last_location_update = unix_time_s;
   });
 
-  rewards_table_t _rewards( get_self(), sensor_itr->miner.value );
+  rewards_table_t _rewards( get_self(), get_first_receiver().value );
   auto rewards_itr = _rewards.find( devname.value );
 
   parameters_table_t _parameters(get_self(), get_first_receiver().value );
@@ -218,35 +279,14 @@ ACTION dclimateiot::submitgps( name devname,
 
 }
 
-ACTION dclimateiot::submitelev( name devname,
-                                float elevation) {
-
-  // Require auth from self
-  require_auth( get_self() );
-
-  // Get upperbound of sensors table
-  sensors_table_t _sensors(get_self(), get_first_receiver().value);
-
-  // Find devname in table
-  auto sensor_itr = _sensors.find( devname.value );
-
-  _sensors.modify(sensor_itr, get_self(), [&](auto& sensor) {
-      sensor.elevation = elevation;
-  });
-
-}
-
-ACTION dclimateiot::chngreward(name devname,
+ACTION dclimateiot3::chngreward(name devname,
                                    name token_contract) {
 
   // Only self can run this Action
   require_auth(get_self());
 
-  // Lookup which miner owns the device
-  name miner = getMiner( devname );
-
   // Delete the fields currently in the rewards table
-  rewards_table_t _rewards(get_self(), miner.value);
+  rewards_table_t _rewards(get_self(), get_first_receiver().value);
   auto rewards_itr = _rewards.find( devname.value );
   
   _rewards.modify( rewards_itr, get_self(), [&](auto& reward) {
@@ -256,7 +296,7 @@ ACTION dclimateiot::chngreward(name devname,
 
 }
 
-ACTION dclimateiot::setrate(name token_contract,
+ACTION dclimateiot3::setrate(name token_contract,
                               float base_hourly_rate) {
                                   
   // Only self can run this Action
@@ -270,7 +310,7 @@ ACTION dclimateiot::setrate(name token_contract,
   });
 }
 
-ACTION dclimateiot::addparam(name token_contract,
+ACTION dclimateiot3::addparam(name token_contract,
                                   float max_distance_km,
                                   float max_rounds,
                                   string symbol_letters,
@@ -294,7 +334,7 @@ ACTION dclimateiot::addparam(name token_contract,
   });
 }
 
-ACTION dclimateiot::removeparam( name token_contract )
+ACTION dclimateiot3::removeparam( name token_contract )
 {
   // Only self can run this Action
   require_auth(get_self());
@@ -305,35 +345,31 @@ ACTION dclimateiot::removeparam( name token_contract )
   _parameters.erase( parameters_itr );
 }
 
-ACTION dclimateiot::removereward( name devname )
+ACTION dclimateiot3::removereward( name devname )
 {
 
   // Require auth from self
   require_auth( get_self() );
 
-  name miner = getMiner(devname);
-
-  rewards_table_t _rewards(get_self(), miner.value);
+  rewards_table_t _rewards(get_self(), get_first_receiver().value);
   auto rewards_itr = _rewards.find( devname.value );
 
   _rewards.erase( rewards_itr );
 }
 
 
-ACTION dclimateiot::removeobs(name devname)
+ACTION dclimateiot3::removeobs(name devname)
 {
   // Require auth from self
   require_auth( get_self() );
 
-  name miner = getMiner(devname);
+  weather_table_t _weather(get_self(), get_first_receiver().value);
+  auto itr = _weather.find( devname.value );
 
-  observations_table_t _observations(get_self(), miner.value);
-  auto itr = _observations.find( devname.value );
-
-  _observations.erase( itr );
+  _weather.erase( itr );
 }
 
-ACTION dclimateiot::removesensor(name devname)
+ACTION dclimateiot3::removesensor(name devname)
 {
   // Require auth from self
   require_auth( get_self() );
@@ -344,23 +380,15 @@ ACTION dclimateiot::removesensor(name devname)
   name miner = sensor_itr->miner;
 
   // First erase observations
-  observations_table_t _observations(get_self(), miner.value);
-  auto obs_itr = _observations.find( devname.value );
-  if ( obs_itr != _observations.cend()) // if row was found
+  weather_table_t _weather(get_self(), get_first_receiver().value);
+  auto wthr_itr = _weather.find( devname.value );
+  if ( wthr_itr != _weather.cend()) // if row was found
   {
-      _observations.erase( obs_itr ); // remove the row
-  }
-
-  // Remove security table
-  security_table_t _security(get_self(), miner.value);
-  auto sec_itr = _security.find( devname.value );
-  if ( sec_itr != _security.cend()) // if row was found
-  {
-      _security.erase( sec_itr ); // remove the row
+      _weather.erase( wthr_itr ); // remove the row
   }
 
   // Erase rewards table
-  rewards_table_t _rewards(get_self(), miner.value);
+  rewards_table_t _rewards(get_self(), get_first_receiver().value);
   auto rewards_itr = _rewards.find( devname.value );
   if ( rewards_itr != _rewards.cend()) // if row was found
   {
@@ -372,7 +400,7 @@ ACTION dclimateiot::removesensor(name devname)
 
 }
 
-ACTION dclimateiot::rmnoaasensor(uint16_t num)
+ACTION dclimateiot3::rmnoaasensor(uint16_t num)
 {
   // Erase "num" number of datapoints from noaa sensor list
 
@@ -393,20 +421,7 @@ ACTION dclimateiot::rmnoaasensor(uint16_t num)
     
 }
 
-name dclimateiot::getMiner( name devname )
-{
-  // Find the owner's name to get the scope
-  sensors_table_t _sensors(get_self(), get_first_receiver().value);
-  auto sensor_itr = _sensors.find( devname.value );
-
-  // Get the sensors data table
-  name miner = sensor_itr->miner;
-
-  return miner;
-
-}
-
-float dclimateiot::calcDistance( float lat1, float lon1, float lat2, float lon2 )
+float dclimateiot3::calcDistance( float lat1, float lon1, float lat2, float lon2 )
 {
   // This function uses the given lat/lon of the devices to deterimine
   //    the distance between them.
@@ -428,17 +443,17 @@ float dclimateiot::calcDistance( float lat1, float lon1, float lat2, float lon2 
 
 }
 
-float dclimateiot::degToRadians( float degrees )
+float dclimateiot3::degToRadians( float degrees )
 {
   // M_PI comes from math.h
     return (degrees * M_PI) / 180.0;
 }
 
-float dclimateiot::calcLocMultiplier( name devname, float max_distance )
+float dclimateiot3::calcLocMultiplier( name devname, float max_distance )
 {
   // First get the latitude/longitude
-  sensors_table_t _sensors(get_self(), get_first_receiver().value);
-  auto devitr = _sensors.find( devname.value );
+  weather_table_t _weather(get_self(), get_first_receiver().value);
+  auto devitr = _weather.find( devname.value );
 
   noaa_table_t _noaasensors( get_self(), get_first_receiver().value );
 
@@ -511,7 +526,7 @@ float dclimateiot::calcLocMultiplier( name devname, float max_distance )
 }
 
 
-void dclimateiot::sendReward( name miner, name devname ) 
+void dclimateiot3::sendReward( name miner, name devname ) 
 {
   /* Determines how much reward to send based on:
    1. Base hourly reward for given currency type
@@ -522,14 +537,19 @@ void dclimateiot::sendReward( name miner, name devname )
    Once this is determined, actually send the reward
   */
   
-  rewards_table_t _rewards(get_self(), miner.value);
+  rewards_table_t _rewards(get_self(), get_first_receiver().value);
   auto rewards_itr = _rewards.find( devname.value );
 
   parameters_table_t _parameters(get_self(), get_first_receiver().value );
   auto parameters_itr = _parameters.find( rewards_itr->token_contract.value );
 
   float consecutive_rounds = (float)rewards_itr->consecutive_rounds;
-  float rounds_mult = 1 + (consecutive_rounds / parameters_itr->max_rounds);
+  
+  float rounds_mult;
+  if ( consecutive_rounds > parameters_itr->max_rounds ) 
+    rounds_mult = 2;
+  else
+    rounds_mult = 1 + (consecutive_rounds / parameters_itr->max_rounds);
 
   string memo = "Thank you for providing data.";
   float token_amount;
@@ -558,7 +578,7 @@ void dclimateiot::sendReward( name miner, name devname )
                           symbol(symbol_code( parameters_itr->symbol_letters ), parameters_itr->precision));
     
   // Do token transfer using an inline function
-  //   This works even with "iot" key being passed, because even though we're not passing
+  //   This works even with "iot" or another account's key being passed, because even though we're not passing
   //   the traditional "active" key, the "active" condition is still met with @eosio.code
   action(
       permission_level{ get_self(), "active"_n },
@@ -568,42 +588,5 @@ void dclimateiot::sendReward( name miner, name devname )
 
 }
 
-string dclimateiot::gen_ptrh_byte_buffer( float pressure_hpa,
-                                          float temperature_c,
-                                          float humidity_percent)
-{
-  /*
-      Note this function should always be maintained to match the same byte arrangement 
-      used on the Kanda microcontrollers
-  */
-  uint8_t size = 6;
-
-  uint8_t txBuffer[size+1];
-  LoraEncoder encoder(txBuffer);
-
-  encoder.writeUint16( (uint16_t)(pressure_hpa*10.0) ); // Convert hpa to deci-paschals to keep precision
-  encoder.writeTemperature(temperature_c);
-  encoder.writeHumidity(humidity_percent);
-
-/* Alternative way of storing the bytes in more human-readable format
-  // Pack the bytes into a string
-  char output[(size * 2) + 1];
-  char *ptr = &output[0];
-  for (int i = 0; i < size; i++) {
-    ptr += sprintf(ptr, "%02X", txBuffer[i]);
-  }
-
-  return output;
-  */
-
-  // null terminate the buffer for string conversion
-  txBuffer[size] = '\0';
-
-  // For simplicity, convert each byte to a character so we can store it as a string
-  string tmp = reinterpret_cast<char *>(txBuffer);
-
-  return tmp;
-}
-
 // Dispatch the actions to the blockchain
-EOSIO_DISPATCH(dclimateiot, (addsensor)(addnoaa)(submitdata)(submitgps)(submitelev)(chngreward)(setrate)(addparam)(removeparam)(removereward)(removeobs)(removesensor)(rmnoaasensor))
+EOSIO_DISPATCH(dclimateiot3, (addsensor)(addminer)(addnoaa)(submitdata)(submitgps)(chngreward)(setrate)(addparam)(removeparam)(removereward)(removeobs)(removesensor)(rmnoaasensor))
