@@ -4,6 +4,28 @@
     "types": [],
     "structs": [
         {
+            "name": "addflag",
+            "base": "",
+            "fields": [
+                {
+                    "name": "bit_value",
+                    "type": "uint64"
+                },
+                {
+                    "name": "processing_step",
+                    "type": "string"
+                },
+                {
+                    "name": "issue",
+                    "type": "string"
+                },
+                {
+                    "name": "explanation",
+                    "type": "string"
+                }
+            ]
+        },
+        {
             "name": "addminer",
             "base": "",
             "fields": [
@@ -106,15 +128,15 @@
             "base": "",
             "fields": [
                 {
-                    "name": "bit_number",
+                    "name": "bit_value",
                     "type": "uint64"
                 },
                 {
-                    "name": "set_by",
+                    "name": "processing_step",
                     "type": "string"
                 },
                 {
-                    "name": "problem",
+                    "name": "issue",
                     "type": "string"
                 },
                 {
@@ -435,6 +457,11 @@
         }
     ],
     "actions": [
+        {
+            "name": "addflag",
+            "type": "addflag",
+            "ricardian_contract": ""
+        },
         {
             "name": "addminer",
             "type": "addminer",
