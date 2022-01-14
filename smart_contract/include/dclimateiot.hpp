@@ -4,7 +4,7 @@
 using namespace std;
 using namespace eosio;
 
-CONTRACT dclimateiot3 : public contract {
+CONTRACT dclimateiot : public contract {
   public:
     using contract::contract;
 
@@ -20,6 +20,11 @@ CONTRACT dclimateiot3 : public contract {
                     float latitude_deg,
                     float longitude_deg,
                     float elevation_m);
+    
+    ACTION addflag( uint64_t bit_value,
+                    string processing_step,
+                    string issue,
+                    string explanation );
 
     ACTION submitdata(name devname,
                       uint64_t unix_time_s,
@@ -187,12 +192,12 @@ CONTRACT dclimateiot3 : public contract {
     > noaa_table_t;
 
     TABLE flags {
-      uint64_t bit_number;
-      string set_by;
-      string problem;
+      uint64_t bit_value;
+      string processing_step;
+      string issue;
       string explanation;
 
-      auto primary_key() const { return bit_number; }
+      auto primary_key() const { return bit_value; }
     };
     typedef multi_index<name("flags"), flags> flags_table_t;
 
