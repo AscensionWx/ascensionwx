@@ -1,3 +1,3 @@
-These "slice" files were sliced with FlashPrint5 for the FlashForge Creator Pro 2 with PETG filament. 
+If you have success with printing the files, upload your Slice files here.
 
-Bed temperature was chosen to be 85 degrees and nozzle temperature of 240 celcius. 
+Place them in a folder with your printer and filament type and include a README file with a short description of your settings.
