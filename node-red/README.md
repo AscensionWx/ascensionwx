@@ -1,8 +1,8 @@
 These files are used for handling of the LoRaWAN messages. Hardware examples include:
 
-UG67 and UG65 Milesight IoT gateway
-Raspberry Pi
-Small AWS EC2 instance
+- UG67 and UG65 Milesight IoT gateway
+- Raspberry Pi
+- Small AWS EC2 instance
 
 These flows can be imported by:
 
