@@ -10,7 +10,7 @@ These flows can be imported by:
 2. Intalling needed NPM package node-red-contrib-telos-eosio
 3. Running the command
 ```
-node-red flows.json
+node-red <flow_filename>.json
 ```
 4. Configuring MQTT and other nodes with appropriate credentials
 
