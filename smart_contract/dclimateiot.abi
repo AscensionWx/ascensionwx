@@ -102,10 +102,6 @@
                 {
                     "name": "devname",
                     "type": "name"
-                },
-                {
-                    "name": "unix_time_s",
-                    "type": "uint64"
                 }
             ]
         },
@@ -330,10 +326,6 @@
                     "type": "name"
                 },
                 {
-                    "name": "unix_time_s",
-                    "type": "uint64"
-                },
-                {
                     "name": "pressure_hpa",
                     "type": "float32"
                 },
@@ -358,10 +350,6 @@
                 {
                     "name": "devname",
                     "type": "name"
-                },
-                {
-                    "name": "unix_time_s",
-                    "type": "uint64"
                 },
                 {
                     "name": "latitude_deg",
