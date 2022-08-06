@@ -10,8 +10,7 @@ CONTRACT dclimateiot : public contract {
 
     // Should be called by device
 
-    ACTION addsensor( name devname,
-                      uint64_t unix_time_s);
+    ACTION addsensor( name devname );
 
     ACTION addminer( name devname,
                      name miner);
@@ -27,14 +26,12 @@ CONTRACT dclimateiot : public contract {
                     string explanation );
 
     ACTION submitdata(name devname,
-                      uint64_t unix_time_s,
                       float pressure_hpa,
                       float temperature_c, 
                       float humidity_percent,
                       uint8_t flags);
 
     ACTION submitgps( name devname,
-                      uint64_t unix_time_s, 
                       float latitude_deg,
                       float longitude_deg,                      
                       float elev_gps_m,
@@ -46,6 +43,7 @@ CONTRACT dclimateiot : public contract {
     
     ACTION setrate(name token_contract,
                   float base_hourly_rate);
+                  //int reward_hours);
 
     ACTION addparam( name token_contract,
                         float max_distance_km,
@@ -53,6 +51,7 @@ CONTRACT dclimateiot : public contract {
                         string symbol_letters,
                         bool usd_denominated,
                         float base_hourly_rate,
+                        //int reward_hours,
                         uint8_t precision);
 
     ACTION removeparam( name token_contract );
@@ -125,6 +124,7 @@ CONTRACT dclimateiot : public contract {
         string symbol_letters;
         bool usd_denominated;
         float base_hourly_rate;
+        //int reward_hours;
         uint8_t precision; // e.g. 4 for Telos , 8 for Kanda
 
         auto primary_key() const { return token_contract.value; }
@@ -153,6 +153,7 @@ CONTRACT dclimateiot : public contract {
       uint64_t by_unixtime() const { return unix_time_s; }
       double by_latitude() const { return latitude_deg; }
       double by_longitude() const { return longitude_deg; }
+      // TODO: custom index based on having / not having specific flag
     };
     //using observations_index = multi_index<"observations"_n, observations>;
     typedef multi_index<name("weather"), 
