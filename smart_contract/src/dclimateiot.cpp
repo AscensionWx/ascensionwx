@@ -1,17 +1,20 @@
 #include <dclimateiot.hpp>
+
 #include <eosio/asset.hpp>
+#include <eosio/system.hpp>
+
 #include <delphioracle.hpp>
-#include "LoraEncoder.cpp"
+#include <evm/evm.hpp>
 
 using namespace std;
 using namespace eosio;
 
-ACTION dclimateiot::addsensor( name devname,
-                  uint64_t unix_time_s ) {
+ACTION dclimateiot::addsensor( name devname ) {
 
   // Only dclimateiot can add a new sensor
   require_auth( get_self() );
 
+  uint64_t unix_time_s = current_time_point().sec_since_epoch();
   name default_token = "eosio.token"_n;
 
   // Scope is self
@@ -23,7 +26,7 @@ ACTION dclimateiot::addsensor( name devname,
     sensor.time_created = unix_time_s;
     sensor.last_location_update = 0;
     sensor.message_type = "p/t/rh";
-    sensor.firmware_version = "0.3.0";
+    sensor.firmware_version = "0.3.1";
   });
 
   // Create the weather table with the miner's scope
@@ -66,7 +69,22 @@ ACTION dclimateiot::addminer( name devname,
   check( is_account(devname) , "Account doesn't exist.");
   check( is_account(miner) , "Account doesn't exist.");
 
-  // Get upperbound of sensors table
+  // To confirm the miner can receive tokens, we send a small amount of Telos to the account
+  uint8_t precision = 4;
+  string memo = "Miner account enabled!";
+  uint32_t amt_number = (uint32_t)(pow( 10, precision ) * 
+                                        0.0001);
+  eosio::asset reward = eosio::asset( 
+                          amt_number,
+                          symbol(symbol_code( "TLOS" ), precision));
+  
+  action(
+      permission_level{ get_self(), "active"_n },
+      "eosio.token"_n , "transfer"_n,
+      std::make_tuple( get_self(), miner, reward, memo )
+  ).send();
+
+  // Add the miner to the sensors table
   sensors_table_t _sensors(get_self(), get_first_receiver().value);
   auto sensor_itr = _sensors.find( devname.value );
 
@@ -103,9 +121,9 @@ ACTION dclimateiot::addflag( uint64_t bit_value,
                             string explanation ) {
   
   flags_table_t _flags(get_self(), get_first_receiver().value);
-
   auto flag_itr = _flags.find( bit_value );
 
+  // If flag doesn't exist, add it
   if (flag_itr==_flags.cend()) {
     _flags.emplace( get_self(), [&](auto& flag) {
       flag.bit_value = bit_value;
@@ -113,7 +131,7 @@ ACTION dclimateiot::addflag( uint64_t bit_value,
       flag.issue = issue;
       flag.explanation = explanation;
     });
-  } else {
+  } else { // else modify it
     _flags.modify(flag_itr, get_self(), [&](auto& flag) {
       flag.bit_value = bit_value;
       flag.processing_step = processing_step;
@@ -125,20 +143,21 @@ ACTION dclimateiot::addflag( uint64_t bit_value,
 }
 
 ACTION dclimateiot::submitdata(name devname,
-                                uint64_t unix_time_s,
                                 float pressure_hpa,
                                 float temperature_c, 
                                 float humidity_percent,
                                 uint8_t flags) {
 
+  uint64_t unix_time_s = current_time_point().sec_since_epoch();
+
   // This flag is to be used to tell the user the data 
   //     was signed by the calling server instead of the device
-  uint8_t signature_flag = 0;
+  bool signature_flag = false;
 
   // Check that permissions are met
   if( !has_auth(devname) ) { // check if device signed transaction
     require_auth( get_self() ); // if device didn't sign it, then dclimateiot should have
-    signature_flag = 1; // Flag the data as signed by the server
+    signature_flag = true; // Flag the data as signed by the server
   }
 
   // Find the sensor in the sensors table
@@ -163,20 +182,29 @@ ACTION dclimateiot::submitdata(name devname,
 
   // Update flags variable
   _weather.modify(weather_itr, get_self(), [&](auto& wthr) {
-      wthr.flags = flags + signature_flag; // + TODO: all other flags
+      wthr.flags = flags 
+                    + ( signature_flag ? 1 : 0 )
+                    + ( (unix_time_s > sensor_itr->last_location_update + 14*3600*24) ? 2 : 0 )
+                    + 0
+                    + 0 ; // + TODO: all other flags
   });
 
   // Set rewards 
   rewards_table_t _rewards( get_self(), get_first_receiver().value );
   auto rewards_itr = _rewards.find( devname.value );
+
+  parameters_table_t _parameters(get_self(), get_first_receiver().value );
+  auto parameters_itr = _parameters.find( rewards_itr->token_contract.value );
   
   uint64_t last_round = rewards_itr->last_round;
 
   // Check if it has been 1 hour since we paid out the reward
+  //if ( unix_time_s > last_round + parameters_itr->reward_hours*3600)
   if ( unix_time_s > last_round + 3600)
   {
 
-    if ( unix_time_s > last_round + 3600*2 ) // Missed the last round
+    //if ( unix_time_s > last_round + (parameters_itr->1+1)*3600 ) // Missed the last round
+    if ( unix_time_s > last_round + 2*3600 )
     {
       _rewards.modify( rewards_itr, get_self(), [&](auto& reward) {
         reward.consecutive_rounds = 0;
@@ -201,7 +229,6 @@ ACTION dclimateiot::submitdata(name devname,
 }
 
 ACTION dclimateiot::submitgps( name devname,
-                                uint64_t unix_time_s, 
                                 float latitude_deg,
                                 float longitude_deg,
                                 float elev_gps_m,
@@ -225,6 +252,8 @@ ACTION dclimateiot::submitgps( name devname,
 
   // Require auth from self
   require_auth( get_self() );
+
+  uint64_t unix_time_s = current_time_point().sec_since_epoch();
 
   // Get sensors table
   sensors_table_t _sensors(get_self(), get_first_receiver().value);
@@ -330,6 +359,7 @@ ACTION dclimateiot::chngreward(name devname,
 
 ACTION dclimateiot::setrate(name token_contract,
                               float base_hourly_rate) {
+                              //int reward_hours) {
                                   
   // Only self can run this Action
   require_auth(get_self());
@@ -339,6 +369,7 @@ ACTION dclimateiot::setrate(name token_contract,
   auto parameters_itr = _parameters.find( token_contract.value );
   _parameters.modify(parameters_itr, get_self(), [&](auto& parameter) {
       parameter.base_hourly_rate = base_hourly_rate;
+      //parameter.reward_hours = reward_hours;
   });
 }
 
@@ -348,12 +379,14 @@ ACTION dclimateiot::addparam(name token_contract,
                                   string symbol_letters,
                                   bool usd_denominated,
                                   float base_hourly_rate,
+                                  //int reward_hours,
                                   uint8_t precision) {
                                   
   // Only self can run this Action
   require_auth(get_self());
 
   parameters_table_t _parameters(get_self(), get_self().value );
+
 
   _parameters.emplace(get_self(), [&](auto& parameter) {
       parameter.token_contract = token_contract;
@@ -362,8 +395,10 @@ ACTION dclimateiot::addparam(name token_contract,
       parameter.symbol_letters = symbol_letters;
       parameter.usd_denominated = usd_denominated;
       parameter.base_hourly_rate = base_hourly_rate;
+      //parameter.reward_hours = reward_hours;
       parameter.precision = precision;
   });
+  
 }
 
 ACTION dclimateiot::removeparam( name token_contract )
@@ -583,7 +618,6 @@ void dclimateiot::sendReward( name miner, name devname )
   else
     rounds_mult = 1 + (consecutive_rounds / parameters_itr->max_rounds);
 
-  string memo = "Thank you for providing data.";
   float token_amount;
 
   if ( parameters_itr->usd_denominated ) {
@@ -593,11 +627,13 @@ void dclimateiot::sendReward( name miner, name devname )
     float usd_price = delphi_itr->value / 10000.0;
 
     token_amount = (parameters_itr->base_hourly_rate
+                    //* parameters_itr->reward_hours
                     * rewards_itr->loc_multiplier
                     * rounds_mult
                     ) / usd_price;
   } else {
     token_amount = (parameters_itr->base_hourly_rate
+                  //* parameters_itr->reward_hours
                   * rewards_itr->loc_multiplier
                   * rounds_mult);
   }
@@ -608,15 +644,41 @@ void dclimateiot::sendReward( name miner, name devname )
   eosio::asset reward = eosio::asset( 
                           amt_number,
                           symbol(symbol_code( parameters_itr->symbol_letters ), parameters_itr->precision));
-    
-  // Do token transfer using an inline function
-  //   This works even with "iot" or another account's key being passed, because even though we're not passing
-  //   the traditional "active" key, the "active" condition is still met with @eosio.code
-  action(
+
+  if( rewards_itr->token_contract == name("eosio.evm") )
+  {
+    // Look up the EVM address from the evm contract
+    evm_table_t _evmaccounts( name("eosio.evm"), name("eosio.evm").value );
+    auto acct_index = _evmaccounts.get_index<"byaccount"_n>();
+    auto evm_itr = acct_index.find( miner.value ); // Use miner's name to query
+
+    checksum160 evmaddress = evm_itr->address;
+    std::array<uint8_t, 32u> bytes = eosio_evm::fromChecksum160( evmaddress );
+
+    // Convert to hex and chop off padded bytes
+    string memo = "0x" + eosio_evm::bin2hex(bytes).substr(24);
+    action(
+      permission_level{ get_self(), "active"_n },
+      "eosio.token"_n , "transfer"_n,
+      std::make_tuple( get_self(), "eosio.evm"_n, reward, memo )
+    ).send();
+
+  } else {
+
+    string memo = "Weather sensor payment";
+
+    // Do token transfer using an inline function
+    //   This works even with "iot" or another account's key being passed, because even though we're not passing
+    //   the traditional "active" key, the "active" condition is still met with @eosio.code
+    action(
       permission_level{ get_self(), "active"_n },
       rewards_itr->token_contract , "transfer"_n,
-      std::make_tuple( get_self(), miner, reward, memo )
-  ).send();
+      std::make_tuple( get_self(), miner, reward, memo)
+    ).send();
+
+  }
+    
+
 
 }
 
