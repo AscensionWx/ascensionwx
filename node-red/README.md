@@ -7,18 +7,26 @@ These files are used for handling of the LoRaWAN messages. Hardware examples inc
 These flows can be imported by:
 
 1. Installing Node-RED globally
-2. Cloning git repo
+2. Updating your $HOME/.node-red/package.json file to include the following property.
+```
+    "dependencies": {
+        "node-red-contrib-telos-eosio": <path to where you will run node-red>
+    }
+```
+  And then run "npm install" to take effect
+
+3. Go to the location where you want to run node-red and the flow file. Cloning external git repo
 ```
 git clone https://github.com/sunburntcat/node-red-contrib-telos-eosio.git
 ```
-3. Install packages
+4. Install packages
 ```
 cd node-red-contrib-telos-eosio
 npm install
 ```
-4. Running node-red with the pre-built flow file
+5. Running node-red with the pre-built flow file
 ```
 node-red <flow_filename>.json
 ```
-5. Configuring MQTT and other nodes with appropriate credentials
+6. Configuring MQTT and other nodes with appropriate credentials
 
