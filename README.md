@@ -13,7 +13,7 @@ The hardware ranges from 3D-printed DIY sensors to commercially available weathe
 
 | 3D-printed AscensionWx     |  SenseCAP LoRaWAN 8-in-1  |  SenseCAP S2101 T+RH sensor |
 :-------------------------:|:-------------------------:|:-------------------------:
-| ![](sample deployment photos/daruvar_croatia.png)  |  ![](sample deployment photos/nipomo_california.png) |  ![](sample deployment photos/tacoma_washington.jpeg) |
+| ![](sample deployment photos/daruvar_croatia.png)  |  ![](sample deployment photos/nipomo_california.png) |  ![](sample deployment photos/seed_studio_s2101.jpeg) |
 
 Live Station Map:
 https://app.kandaweather.net
