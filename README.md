@@ -11,11 +11,9 @@ The hardware ranges from 3D-printed DIY sensors to commercially available weathe
 | Content Cell  | Content Cell  |
 
 
-| Italic             |  Block letters |
-:-------------------------:|:-------------------------:
-![](outputs/output_Biotouch/18-15_02-02-2018/Identification/ITALIC/ITALIC_movementPoints_cmc.png)  |  ![](outputs/output_Biotouch/18-15_02-02-2018/Identification/BLOCK_LETTERS/BLOCK_LETTERS_movementPoints_cmc.png)
-![](outputs/output_Biotouch/18-15_02-02-2018/Verification/ITALIC/ITALIC_movementPoints_notbalanced_roc.png)  |  ![](outputs/output_Biotouch/18-15_02-02-2018/Verification/BLOCK_LETTERS/BLOCK_LETTERS_movementPoints_notbalanced_roc.png)
-![](outputs/output_Biotouch/18-15_02-02-2018/Verification/ITALIC/ITALIC_movementPoints_notbalanced_frrVSfpr.png)  |  ![](outputs/output_Biotouch/18-15_02-02-2018/Verification/BLOCK_LETTERS/BLOCK_LETTERS_movementPoints_notbalanced_frrVSfpr.png)
+| 3D-printed AscensionWx     |  SenseCAP LoRaWAN 8-in-1  |  SenseCAP S2101 T+RH sensor |
+:-------------------------:|:-------------------------:|:-------------------------:
+| ![](sample deployment photos/daruvar_croatia.png)  |  ![](sample deployment photos/nipomo_california.png) |  ![](sample deployment photos/tacoma_washington.jpeg) |
 
 Live Station Map:
 https://app.kandaweather.net
