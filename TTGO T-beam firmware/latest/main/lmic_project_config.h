@@ -8,6 +8,9 @@
 // Make sure only one of the following is defined (CFG_us915 or CFG_eu868)
 #define CFG_us915 1
 //#define CFG_eu868 1
+//#define CFG_as923 1 // Southeast asia
+//#define CFG_au921 1 // Australia
+//#define CFG_in866 1 // India
 
 // DO NOT modify this
 #define CFG_sx1276_radio 1
